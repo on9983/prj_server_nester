@@ -1,11 +1,15 @@
 from tkinter import *
 from tkinter import ttk
 from ScannerNesterByIp import ScannerNester
-import DataScanSaver
+import DataSaver
+from threading import Event
 import threading
 
 
+event = Event()
 data = {}
+sondeSelected = None
+
 # HVR01 = {
 #     "nom":"HVR01",
 #     "port":"1519"
@@ -23,23 +27,75 @@ harvesters = {
 
 
 def chainHVRScan():
+    
+    progressbar.start()
+    data={}
+    listboxListHVR.delete(0,END)
+
+    j=0
     for i in range(2,255,1):
+        global event
+        if event.is_set():
+            event.clear()
+            progressbar.stop()
+            break
         try:
-            data = ScannerNester.MakeScanWithHarvester("192.168.15."+str(i))
-            listbox.insert("end",data)
+            data["192.168.15."+str(i)] = ScannerNester.MakeScanWithHarvester("192.168.15."+str(i))
+            j+=1
+            listboxListHVR.insert("end","192.168.15."+str(i))
         except:
             i+=1
             i-=1
+    if data !={}:
+        DataSaver.saveScanJson("scanData.json",data)
+
+
+def chainHVRTrouverScan():
+    data={}
+    progressbar2.start()
+    try:
+        data_ip = DataSaver.loadScanJson("scanData.json")
+        for ip in list(data_ip):
+            global event
+            if event.is_set():
+                event.clear()
+                progressbar2.stop()
+                break
+            try:
+                data[ip] = ScannerNester.MakeScanWithHarvester(ip)
+            except:
+                pass
+        if data !={}:
+            DataSaver.saveScanJson("scanData.json",data)
+    except: 
+        pass
+
+
+def HVRSelectedScan():
+    global sondeSelected
+    progressbar3.start()
+    try:
+        data_load = DataSaver.loadScanJson("scanData.json")
+        data = ScannerNester.MakeScanWithHarvester(sondeSelected)
+
+        data_load[sondeSelected] = data 
+
+        DataSaver.saveScanJson("scanData.json",data_load)
+    except: 
+        pass
+
+
+
 
 
 def submit():
     chainHVRScan()
 
-def start_submit_thread(event):
+def start_submit_thread(targetFunction):
     global submit_thread
-    submit_thread = threading.Thread(target=submit)
+    submit_thread = threading.Thread(target=targetFunction) #, args=(event,))
     submit_thread.daemon = True
-    progressbar.start()
+    # progressbar.start()
     submit_thread.start()
     gui.after(20, check_submit_thread)
 
@@ -48,17 +104,69 @@ def check_submit_thread():
         gui.after(20, check_submit_thread)
     else:
         progressbar.stop()
+        progressbar2.stop()
+        progressbar3.stop()
+
+def stopChainHVRScan():
+    global event
+    event.set()
 
 
+def onselectHVR(event):
+    global sondeSelected
+    selection = event.widget.curselection()
+    if selection:
+        index = selection[0]
+        strSelected = event.widget.get(index)
+        sondeSelected = strSelected
 
+        data = DataSaver.loadScanJson("scanData.json")
+        data = eval(data[strSelected])
 
+        L22.configure(text=str(data["hostName"]))#list(data.keys())[0])
+        L24.configure(text=strSelected)
+        L26.configure(text=str(data["nb_clients"]))
+        
+        listboxClients.delete(0,END)
+        for ip in list(data):
+            if ip !="nb_clients" and ip !="hostName":
+                listboxClients.insert(END,ip)
+                
+    else:
+        L22.configure(text="No probe selected")
+        L24.configure(text="No probe selected")
+        L26.configure(text="No probe selected")
+        listboxClients.delete(0,END)
+
+def onselectClient(event):
+    global sondeSelected
+    selection = event.widget.curselection()
+    if selection:
+        index = selection[0]
+        strSelected = event.widget.get(index)
+
+        data = DataSaver.loadScanJson("scanData.json")
+        data = eval(data[sondeSelected])
+        data = data[strSelected]
+        data = data["ports"]
+        # print(data)
+
+        listboxPorts.delete(0,END)
+        if data == {}:
+            listboxPorts.insert(END,"Pas de ports ouverts trouvés.")
+        else:
+            for port in list(data):
+                listboxPorts.insert(END,port)
+    else:
+        listboxClients.delete(0,END)
 
 # ==== GUI ====
 gui = Tk()
-gui.title('Port Scanner')
-gui.geometry("400x800+20+20")
+gui.title('Seaweak harvester')
+gui.geometry("800x800+20+20")
 
-gui_ypos = 120
+gui_ypos = 220
+gui_xpos = 400
 
 # ==== Colors ====
 m1c = '#00ee00'
@@ -68,58 +176,111 @@ fgc = '#111111'
 
 gui.tk_setPalette(background=bgc, foreground=m1c, activeBackground=fgc,activeForeground=bgc, highlightColor=m1c, highlightBackground=m1c)
 
+stl = ttk.Style()
+stl.theme_use('clam')
+stl.configure("red.Horizontal.TProgressbar", background=bgc, troughcolor =bgc, bordercolor=m1c, lightcolor=m1c, darkcolor=m1c)
 
 # ==== Chercheur d'harvester ====
-L011 = Label(gui, text = "Chercheur d'harvester",  font=("Helvetica", 16))
+L011 = Label(gui, text = "Chercheur de sondes",  font=("Helvetica", 16))
 L011.place(x = 16, y = 20)
 
-B011 = Button(gui, text = "Start Scan", command=lambda:start_submit_thread(None))
+B011 = Button(gui, text = "Start Scan", command=lambda:start_submit_thread(chainHVRScan))
 B011.place(x = 16, y = 50, width = 170)
-B012 = Button(gui, text = "Stop Scan", command=lambda:start_submit_thread(None))
+B012 = Button(gui, text = "Stop Scan", command=lambda:stopChainHVRScan())
 B012.place(x = 210, y = 50, width = 170)
-progressbar = ttk.Progressbar(gui, orient=HORIZONTAL, length=100, mode='indeterminate')
-progressbar.place(x = 32, y = 85)
+progressbar = ttk.Progressbar(gui, style="red.Horizontal.TProgressbar", orient=HORIZONTAL, length=60, mode='indeterminate')
+progressbar.place(x = 72, y = 85)
+
+# ==== Liste des sondes trouvés ====
+L012 = Label(gui, text = "Liste des sondes trouvés :",  font=("Helvetica", 11))
+L012.place(x = 80, y = 120)
+frameListHVR = Frame(gui)
+frameListHVR.place(x = 80, y = 140, width = 240, height = 309)
+listboxListHVR = Listbox(frameListHVR, width = 240, height = 17, exportselection=False )
+listboxListHVR.place(x = 0, y = 0)
+listboxListHVR.bind('<<ListboxSelect>>', onselectHVR)
+try:
+    prevList = DataSaver.loadScanJson("scanData.json")
+    for ip in prevList.keys():
+        listboxListHVR.insert(END,ip)
+except: 
+    pass
+scrollbar = Scrollbar(frameListHVR)
+scrollbar.pack(side=RIGHT, fill=Y)
+listboxListHVR.config(yscrollcommand=scrollbar.set)
+scrollbar.config(command=listboxListHVR.yview)
 
 
-# ==== Labels ====
-L11 = Label(gui, text = "Seahawks Harvester",  font=("Helvetica", 16))
-L11.place(x = 16, y = 10 + gui_ypos)
-
-L21 = Label(gui, text = "Nom du harvester : ")
-L21.place(x = 16, y = 90 + gui_ypos)
-L22 = Label(gui, text = "???")
-L22.place(x = 180, y = 90 + gui_ypos)
-
-L23 = Label(gui, text = "IP du harvester : ")
-L23.place(x = 16, y = 120 + gui_ypos)
-L23 = Label(gui, text = "???")
-L23.place(x = 180, y = 120 + gui_ypos)
-
-L24 = Label(gui, text = "Nb de clients detectés : ")
-L24.place(x = 16, y = 150 + gui_ypos)
-L25 = Label(gui, text = "???")
-L25.place(x = 180, y = 150 + gui_ypos)
-
-L26 = Label(gui, text = "Liste des connexions LAN ")
-L26.place(x = 16, y = 240 + gui_ypos)
+# ==== Lancer un scanne général ====
+LSG_ypos = 230
+L013 = Label(gui, text = "Lancer un scan réseaux",  font=("Helvetica", 16))
+L013.place(x = 16, y = 280+LSG_ypos)
+L014 = Text(gui, height=10, width=40, wrap=WORD, highlightthickness=0,borderwidth=0, font=("Helvetica", 9))
+L014.insert(END, "Met à jours les informations des sondes trouvés.")
+L014.place(x = 16, y = 310+LSG_ypos)
+B11 = Button(gui, text = "Start Scan", command=lambda:start_submit_thread(chainHVRTrouverScan))
+B11.place(x = 16, y = 336+LSG_ypos, width = 170)
+progressbar2 = ttk.Progressbar(gui, style="red.Horizontal.TProgressbar", orient=HORIZONTAL, length=60, mode='indeterminate')
+progressbar2.place(x = 72, y = 370+LSG_ypos)
+B21 = Button(gui, text = "Export All Result", command=lambda:DataSaver.saveScanJson("nofing",data))
+B21.place(x = 210, y = 336+LSG_ypos, width = 170)
 
 
-# ==== Ports list ====
+
+
+
+# ==== Infos de l'harvester ====
+L11 = Label(gui, text = "Infos sur la sonde sélectionnée",  font=("Helvetica", 16))
+L11.place(x = 16 + gui_xpos, y = 20)
+
+L21 = Label(gui, text = "Nom de la sonde : ")
+L21.place(x = 16 + gui_xpos, y = 70)
+L22 = Label(gui, text = "No probe selected")
+L22.place(x = 180 + gui_xpos, y = 70)
+
+L23 = Label(gui, text = "IP de la sonde : ")
+L23.place(x = 16 + gui_xpos, y = 100)
+L24 = Label(gui, text = "No probe selected")
+L24.place(x = 180 + gui_xpos, y = 100)
+
+L25 = Label(gui, text = "Nb de clients detectés : ")
+L25.place(x = 16 + gui_xpos, y = 130)
+L26 = Label(gui, text = "No probe selected")
+L26.place(x = 180 + gui_xpos, y = 130)
+
+B31 = Button(gui, text = "Refresh Scan", command=lambda:start_submit_thread(HVRSelectedScan))
+B31.place(x = 64 + gui_xpos, y = 180, width = 170)
+progressbar3 = ttk.Progressbar(gui, style="red.Horizontal.TProgressbar", orient=HORIZONTAL, length=60, mode='indeterminate')
+progressbar3.place(x = 120 + gui_xpos, y = 214)
+
+# ==== Liste des clients ====
+L27 = Label(gui, text = "Liste des clients détectés :")
+L27.place(x = 16 + gui_xpos, y = 240)
 frame = Frame(gui)
-frame.place(x = 16, y = 275 + gui_ypos, width = 370, height = 215)
-listbox = Listbox(frame, width = 59, height = 12 )
-listbox.place(x = 0, y = 0)
-listbox.bind('<<ListboxSelect>>')
+frame.place(x = 16 + gui_xpos, y = 262, width = 370, height = 255)
+listboxClients = Listbox(frame, width = 59, height = 14, exportselection=False)
+listboxClients.place(x = 0, y = 0)
+listboxClients.bind('<<ListboxSelect>>', onselectClient)
 scrollbar = Scrollbar(frame)
 scrollbar.pack(side=RIGHT, fill=Y)
-listbox.config(yscrollcommand=scrollbar.set)
-scrollbar.config(command=listbox.yview)
+listboxClients.config(yscrollcommand=scrollbar.set)
+scrollbar.config(command=listboxClients.yview)
 
-# ==== Buttons / Scans ====
-B11 = Button(gui, text = "Start Scan", command=lambda:start_submit_thread(None))
-B11.place(x = 16, y = 500 + gui_ypos, width = 170)
-B21 = Button(gui, text = "Save Result", command=lambda:DataScanSaver.saveScanTxt(data))
-B21.place(x = 210, y = 500 + gui_ypos, width = 170)
+# ==== Ports list ====
+L28 = Label(gui, text = "Liste des ports ouverts du client selectionné :")
+L28.place(x = 16 + gui_xpos, y = 340 + gui_ypos)
+
+frame = Frame(gui)
+frame.place(x = 16 + gui_xpos, y = 362 + gui_ypos, width = 370, height = 165)
+listboxPorts = Listbox(frame, width = 59, height = 9, exportselection=False )
+listboxPorts.place(x = 0, y = 0)
+listboxPorts.bind('<<ListboxSelect>>')
+scrollbar = Scrollbar(frame)
+scrollbar.pack(side=RIGHT, fill=Y)
+listboxPorts.config(yscrollcommand=scrollbar.set)
+scrollbar.config(command=listboxPorts.yview)
+
+
 
 # ==== Start GUI ====
 gui.mainloop()
