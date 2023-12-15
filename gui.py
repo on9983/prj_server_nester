@@ -54,13 +54,9 @@ def chainHVRScan():
             progressbar.stop()
             break
         try:
-            print("1")
             data[contact_ip] = ScannerNester.MakeScanWithHarvester(contact_ip)
-            print("2")
             DataSaver.saveScanJson("scanData",data)
-            print("3")
             listboxListHVR.insert("end",contact_ip)
-            print("4")
         except:
             pass
     # if data !={}:
