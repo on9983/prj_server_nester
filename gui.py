@@ -47,26 +47,26 @@ def chainHVRScan():
             i+=1
             i-=1
     if data !={}:
-        DataSaver.saveScanJson("scanData.json",data)
+        DataSaver.saveScanJson("scanData",data)
 
 
 def chainHVRTrouverScan():
     data={}
     progressbar2.start()
     try:
-        data_ip = DataSaver.loadScanJson("scanData.json")
-        for ip in list(data_ip):
+        data_load= DataSaver.loadScanJson("scanData")
+        for ip in list(data_load):
             global event
             if event.is_set():
                 event.clear()
                 progressbar2.stop()
                 break
             try:
-                data[ip] = ScannerNester.MakeScanWithHarvester(ip)
+                data = ScannerNester.MakeScanWithHarvester(ip)
+                data_load[ip] = data 
             except:
                 pass
-        if data !={}:
-            DataSaver.saveScanJson("scanData.json",data)
+        DataSaver.saveScanJson("scanData",data_load)
     except: 
         pass
 
@@ -75,12 +75,12 @@ def HVRSelectedScan():
     global sondeSelected
     progressbar3.start()
     try:
-        data_load = DataSaver.loadScanJson("scanData.json")
+        data_load = DataSaver.loadScanJson("scanData")
         data = ScannerNester.MakeScanWithHarvester(sondeSelected)
 
         data_load[sondeSelected] = data 
 
-        DataSaver.saveScanJson("scanData.json",data_load)
+        DataSaver.saveScanJson("scanData",data_load)
     except: 
         pass
 
@@ -120,12 +120,15 @@ def onselectHVR(event):
         strSelected = event.widget.get(index)
         sondeSelected = strSelected
 
-        data = DataSaver.loadScanJson("scanData.json")
-        data = eval(data[strSelected])
-
+        data = DataSaver.loadScanJson("scanData")
+        data = data[strSelected]
         L22.configure(text=str(data["hostName"]))#list(data.keys())[0])
         L24.configure(text=strSelected)
         L26.configure(text=str(data["nb_clients"]))
+        L22.config(fg=mgrey)
+        L24.config(fg=mgrey)
+        L26.config(fg=mgrey)
+        B31["state"] = "normal"
         
         listboxClients.delete(0,END)
         for ip in list(data):
@@ -136,6 +139,10 @@ def onselectHVR(event):
         L22.configure(text="No probe selected")
         L24.configure(text="No probe selected")
         L26.configure(text="No probe selected")
+        L22.config(fg=m1c_blk)
+        L24.config(fg=m1c_blk)
+        L26.config(fg=m1c_blk)
+        B31["state"] = "disabled"
         listboxClients.delete(0,END)
 
 def onselectClient(event):
@@ -145,8 +152,8 @@ def onselectClient(event):
         index = selection[0]
         strSelected = event.widget.get(index)
 
-        data = DataSaver.loadScanJson("scanData.json")
-        data = eval(data[sondeSelected])
+        data = DataSaver.loadScanJson("scanData")
+        data = data[sondeSelected]
         data = data[strSelected]
         data = data["ports"]
         # print(data)
@@ -170,6 +177,8 @@ gui_xpos = 400
 
 # ==== Colors ====
 m1c = '#00ee00'
+m1c_blk = '#006400'
+mgrey = '#999999'
 bgc = '#222222'
 dbg = '#000000'
 fgc = '#111111'
@@ -199,8 +208,9 @@ frameListHVR.place(x = 80, y = 140, width = 240, height = 309)
 listboxListHVR = Listbox(frameListHVR, width = 240, height = 17, exportselection=False )
 listboxListHVR.place(x = 0, y = 0)
 listboxListHVR.bind('<<ListboxSelect>>', onselectHVR)
+listboxListHVR.config(fg=mgrey)
 try:
-    prevList = DataSaver.loadScanJson("scanData.json")
+    prevList = DataSaver.loadScanJson("scanData")
     for ip in prevList.keys():
         listboxListHVR.insert(END,ip)
 except: 
@@ -224,6 +234,7 @@ progressbar2 = ttk.Progressbar(gui, style="red.Horizontal.TProgressbar", orient=
 progressbar2.place(x = 72, y = 370+LSG_ypos)
 B21 = Button(gui, text = "Export All Result", command=lambda:DataSaver.saveScanJson("nofing",data))
 B21.place(x = 210, y = 336+LSG_ypos, width = 170)
+B21["state"] = "disabled"
 
 
 
@@ -248,8 +259,13 @@ L25.place(x = 16 + gui_xpos, y = 130)
 L26 = Label(gui, text = "No probe selected")
 L26.place(x = 180 + gui_xpos, y = 130)
 
+L22.config(fg=m1c_blk)
+L24.config(fg=m1c_blk)
+L26.config(fg=m1c_blk)
+
 B31 = Button(gui, text = "Refresh Scan", command=lambda:start_submit_thread(HVRSelectedScan))
 B31.place(x = 64 + gui_xpos, y = 180, width = 170)
+B31["state"] = "disabled"
 progressbar3 = ttk.Progressbar(gui, style="red.Horizontal.TProgressbar", orient=HORIZONTAL, length=60, mode='indeterminate')
 progressbar3.place(x = 120 + gui_xpos, y = 214)
 
@@ -261,6 +277,7 @@ frame.place(x = 16 + gui_xpos, y = 262, width = 370, height = 255)
 listboxClients = Listbox(frame, width = 59, height = 14, exportselection=False)
 listboxClients.place(x = 0, y = 0)
 listboxClients.bind('<<ListboxSelect>>', onselectClient)
+listboxClients.config(fg=mgrey)
 scrollbar = Scrollbar(frame)
 scrollbar.pack(side=RIGHT, fill=Y)
 listboxClients.config(yscrollcommand=scrollbar.set)
@@ -275,6 +292,7 @@ frame.place(x = 16 + gui_xpos, y = 362 + gui_ypos, width = 370, height = 165)
 listboxPorts = Listbox(frame, width = 59, height = 9, exportselection=False )
 listboxPorts.place(x = 0, y = 0)
 listboxPorts.bind('<<ListboxSelect>>')
+listboxPorts.config(fg=mgrey)
 scrollbar = Scrollbar(frame)
 scrollbar.pack(side=RIGHT, fill=Y)
 listboxPorts.config(yscrollcommand=scrollbar.set)

@@ -11,7 +11,7 @@ class ScannerNester:
         print("Connexion à "+ip_harvester+" réussie.")
         s.send(bytes("MakeScan", "utf-8")) #bytes ou .encode()
 
-        data = s.recv(9999).decode("utf8")
+        data = eval(s.recv(9999).decode("utf8")) #eval sert à convertir en dict
         print(data)
 
         s.close()
