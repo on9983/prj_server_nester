@@ -4,7 +4,10 @@ from ScannerNesterByIp import ScannerNester
 import DataSaver
 from threading import Event
 import threading
+import nmap3, socket
 
+
+nmap = nmap3.Nmap()
 
 event = Event()
 data = {}
@@ -32,22 +35,36 @@ def chainHVRScan():
     data={}
     listboxListHVR.delete(0,END)
 
+    
+    nmapResult = nmap.scan_top_ports(socket.gethostbyname(socket.gethostname()+".local") + "/24")
+    contacts = {}
     j=0
-    for i in range(2,255,1):
+    for ip,data_ip in nmapResult.items():
+        if('ports' in data_ip):
+            if(data_ip["ports"] != []):
+                contacts[j] = ip
+                j+=1
+
+    # print(contacts)
+
+    for contact_ip in contacts.values():
         global event
         if event.is_set():
             event.clear()
             progressbar.stop()
             break
         try:
-            data["192.168.15."+str(i)] = ScannerNester.MakeScanWithHarvester("192.168.15."+str(i))
-            j+=1
-            listboxListHVR.insert("end","192.168.15."+str(i))
+            print("1")
+            data[contact_ip] = ScannerNester.MakeScanWithHarvester(contact_ip)
+            print("2")
+            DataSaver.saveScanJson("scanData",data)
+            print("3")
+            listboxListHVR.insert("end",contact_ip)
+            print("4")
         except:
-            i+=1
-            i-=1
-    if data !={}:
-        DataSaver.saveScanJson("scanData",data)
+            pass
+    # if data !={}:
+    #     DataSaver.saveScanJson("scanData",data)
 
 
 def chainHVRTrouverScan():

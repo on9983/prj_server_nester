@@ -6,6 +6,7 @@ class ScannerNester:
     def MakeScanWithHarvester(ip_harvester):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(10.0)
         s.connect((ip_harvester, 9999))
 
         print("Connexion à "+ip_harvester+" réussie.")
